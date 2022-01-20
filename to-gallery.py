@@ -3,7 +3,7 @@
 #to-gallery.py -- generate a basic html thumbnail gallery for a folder of images
 #usage: to-gallery.py [-mode color|gray|hq] [-xsize size] [-ysize size] [-regenerate] galleryname
 
-# (C) 2021 B.M.Deeal
+# (C) 2021, 2022 B.M.Deeal
 #Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby granted, provided that the above copyright notice and this permission notice appear in all copies.
 
 #THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
@@ -16,7 +16,7 @@
 #This is why the defaults are the way they are -- grayscale 64x64 .gif thumbnails on extremely plain Web 1.0 style pages. The device supports .jpg, but decoding JPEG files on a late 90s handheld device is VERY slow.
 #Same thing with the color setting: I have another, quite a bit faster CE2.11 device with color that is more okay with JPEG, but it's still way faster working with .gif files vs .jpg on it, and high-quality (like 85 quality) files are still kinda slow to decode.
 
-#This is not some production grade piece of software, this is a little utility that lets me use some obsolete handheld devices as a convenient photo gallery.
+#This is not a production grade piece of software, this is a little utility that lets me use obsolete handheld devices as a convenient photo gallery.
 
 #This script isn't designed to handle arbitrary folder locations currently, it expects you to be in the parent directory of the folder with all the pictures.
 #In short, don't call it like 'to-gallery.py folder/otherfolder'. It might even work, but it is entirely untested and I know the old BASH script that I wrote (and referenced heavily for this) broke badly when you did that.
@@ -25,8 +25,8 @@
 #TODO: -mode
 #TODO: there are certainly a few spots with terrible error handling right now
 #TODO: test under Windows proper and not just under WSL -- this tries to do the Right Thing and use proper path constructing functions but I might just end up removing all of that because it seems like a bunch of fragile magic that overcomplicates things since windows cheerfully accepts / anyway as the separator; but like, I don't have imagemagick installed under Windows lol
-#TODO: "lucky" image feature, where it generates a shuffled list of images so you can cycle through them in an entire arbitrary order -- like random sort, but because this is static, you can't really do an acutal random sort lol, I'd ideally want to make sure that hitting lucky repeatedly will never get stuck in a loop before showing all the images
-#TODO: modern mode that uses a nice HTML5 layout with <div> and the lot, so you can have nice CSS theming, and it'd even include a default stylesheet if one doesn't already exist, would probably end up being a version 2.0 feature
+#TODO: "lucky" image feature, where it generates a shuffled list of images so you can cycle through them in an entire arbitrary order -- like random sort, but because this is static, you can't really do an acutal random sort lol, I'd ideally want to make sure that hitting lucky repeatedly will never get stuck in a loop before showing all the images, but honestly, just a basic, "dumb" shuffle option would be nice
+#TODO: modern mode that uses a nice HTML5 layout so you can have nice CSS theming, and it'd even include a default stylesheet if one doesn't already exist, would probably end up being a version 2.0 feature -- the current layout isn't unthemeable, but it's also not laid out for it either and doesn't include a stylesheed link
 
 import sys
 import os
@@ -36,7 +36,7 @@ import random
 
 #important globals
 version_major="1"
-version_minor="3"
+version_minor="4"
 version_suffix="release" #could be alpha, beta, or release
 version_string=f"{version_major}.{version_minor}-{version_suffix}"
 default_size=64
@@ -49,16 +49,16 @@ page_dir="g-pages"
 regenerate=False #whether to re-create the thumbnails (pages are always re-created, since the order may have changed)
 mode="gray" #could be gray, color, or hq - gray and color are .gif format, hq generates modern .jpg thumbnails in color (not implemented yet)
 result_ext="gif" #gif under gray/color, jpg under hq
-footer_text=f"<hr>Generated on {datetime.date.today().strftime('%B %d, %Y')} with to-gallery.py, version {version_string}<br> Script (C) 2021 B.M.Deeal.</body></html>"
+footer_text=f"<hr>Generated on {datetime.date.today().strftime('%B %d, %Y')} with to-gallery.py, version {version_string}<br> Script (C) 2021, 2022 B.M.Deeal.</body></html>"
 
 
 def helpScreen():
 	"""
 	Show the help.
-	TODO: finish
+	TODO: make nicer
 	"""
 	print(f"to-gallery.py v{version_string}\nUtility to generate a basic HTML thumbnail gallery for a folder of images.")
-	print("(C) 2021 B.M.Deeal. Distributed under the ISC license.\n")
+	print("(C) 2021, 2022 B.M.Deeal. Distributed under the ISC license.\n")
 	print("usage: to-gallery.py [-mode color|gray|hq] [-xsize size] [-ysize size] [-regenerate] galleryname")
 	print("For example, to generate a my-pics.html file for a folder named my-pics in the current directory, with 160x120 JPG thumbnails, you might do:")
 	print("    to-gallery.py -mode hq -xsize 160 -ysize 120 -regenerate my-pics")
@@ -76,14 +76,15 @@ def generatePage(image, image_prev, image_next, number, end):
 	thumb_next=os.path.join("..", thumb_dir, f"{image_next}.{result_ext}")
 	top=os.path.join("..","..",f"{gallery_name_clean}.html")
 	pic=os.path.join("..", image)
-	title=image #might remove the extension
-	
+	title=image #TODO: might remove the extension
 	result=[f"<html><head><title>{title}</title></head> <body>image {number} of {end}<br>[{title}]<hr>"]
-	navtext=f"<a href='{prev}'>prev</a> | <a href='{next}'>next</a> | <a href='{top}'>index</a><br>"
+	navtext=f"<a href='{prev}'>prev</a> | <a href='{next}'>next</a> | <a href='{top}'>index</a> | <a href='{pic}'>image</a><br>"
+	imgtext=f"<a href='{prev}'><img src='{thumb_prev}' width={x_size} height={y_size}></a><a href='{next}'><img src='{thumb_next}' width={x_size} height={y_size}></a><br>"
 	result.append(navtext)
-	result.append(f"<br><a href='{pic}'><img src='{pic}'></a><br>")
-	result.append(f"<a href='{prev}'><img src='{thumb_prev}' width={x_size} height={y_size}></a><a href='{next}'><img src='{thumb_next}' width={x_size} height={y_size}></a><br>")
-	result.append(f"<br>{navtext}")
+	result.append(imgtext)
+	result.append(f"<a href='{next}'><img src='{pic}'></a><br>")
+	result.append(imgtext)
+	result.append(navtext)
 	result.append(footer_text)
 	try:
 		with open(path, "w") as ff:
@@ -153,7 +154,6 @@ def createGallery():
 		else:
 			print(f"notice: skipping thumbnail generation for '{image}'.")
 		print(f"Generating page in '{page_target}'...")
-		#if not generatePage(page_target, page_target_prev, page_target_next, page_target_top, page_target_image, ii+1, length, image):
 		if not generatePage(image, image_prev, image_next, ii+1, length):
 			print(f"error: could not generate page '{page_target}'! Gallery navigation will be somewhat broken.")
 		#add each generated thumbnail

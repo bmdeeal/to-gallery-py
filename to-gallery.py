@@ -25,8 +25,8 @@
 #TODO: -mode
 #TODO: there are certainly a few spots with terrible error handling right now
 #TODO: test under Windows proper and not just under WSL -- this tries to do the Right Thing and use proper path constructing functions but I might just end up removing all of that because it seems like a bunch of fragile magic that overcomplicates things since windows cheerfully accepts / anyway as the separator; but like, I don't have imagemagick installed under Windows lol
-#TODO: "lucky" image feature, where it generates a shuffled list of images so you can cycle through them in an entire arbitrary order -- like random sort, but because this is static, you can't really do an acutal random sort lol, I'd ideally want to make sure that hitting lucky repeatedly will never get stuck in a loop before showing all the images, but honestly, just a basic, "dumb" shuffle option would be nice
-#TODO: modern mode that uses a nice HTML5 layout so you can have nice CSS theming, and it'd even include a default stylesheet if one doesn't already exist, would probably end up being a version 2.0 feature -- the current layout isn't unthemeable, but it's also not laid out for it either and doesn't include a stylesheed link
+#TODO: "lucky" image feature, where it generates a shuffled list of images so you can cycle through them in an entire arbitrary order -- like random sort, but because this is static, you can't really do an acutal random sort lol, I'd ideally want to make sure that hitting lucky repeatedly will never get stuck in a loop before showing all the images, but honestly, just a basic, "dumb" shuffle option would be nice [done, but needs refinement]
+#TODO: modern mode that uses a nice HTML5 layout so you can have nice CSS theming, and it'd even include a default stylesheet if one doesn't already exist, would probably end up being a version 2.0 feature -- the current layout isn't unthemeable, but it's also not laid out for it either and doesn't include a stylesheet link
 
 import sys
 import os
@@ -36,7 +36,7 @@ import random
 
 #important globals
 version_major="1"
-version_minor="4"
+version_minor="5"
 version_suffix="release" #could be alpha, beta, or release
 version_string=f"{version_major}.{version_minor}-{version_suffix}"
 default_size=64
@@ -63,29 +63,33 @@ def helpScreen():
 	print("For example, to generate a my-pics.html file for a folder named my-pics in the current directory, with 160x120 JPG thumbnails, you might do:")
 	print("    to-gallery.py -mode hq -xsize 160 -ysize 120 -regenerate my-pics")
 
-#def generatePage(path, prev, next, top, pic, number, end, title):
-def generatePage(image, image_prev, image_next, number, end):
+def generatePage(image, image_prev, image_next, number, end, lucky="#"):
 	"""
 	Generate per-image pages so you can navigate in-order through the gallery.
 	This function needs to be refactored, or at least its signature does, lol. Oh well.
 	"""
+	#build filenames
 	path=os.path.join(gallery_name, page_dir, f"{image}.html")
 	prev=f"{image_prev}.html"
 	next=f"{image_next}.html"
+	lucky=f"{lucky}.html"
 	thumb_prev=os.path.join("..", thumb_dir, f"{image_prev}.{result_ext}")
 	thumb_next=os.path.join("..", thumb_dir, f"{image_next}.{result_ext}")
 	top=os.path.join("..","..",f"{gallery_name_clean}.html")
 	pic=os.path.join("..", image)
 	title=image #TODO: might remove the extension
+	#build page data
 	result=[f"<html><head><title>{title}</title></head> <body>image {number} of {end}<br>[{title}]<hr>"]
-	navtext=f"<a href='{prev}'>prev</a> | <a href='{next}'>next</a> | <a href='{top}'>index</a> | <a href='{pic}'>image</a><br>"
+	navtext=f"<a href='{prev}'>prev</a> | <a href='{next}'>next</a> | <a href='{top}'>index</a> | <a href='{pic}'>image</a> | <a href='{lucky}'>lucky</a><br>"
 	imgtext=f"<a href='{prev}'><img src='{thumb_prev}' width={x_size} height={y_size}></a><a href='{next}'><img src='{thumb_next}' width={x_size} height={y_size}></a><br>"
+	#emit page data
 	result.append(navtext)
 	result.append(imgtext)
 	result.append(f"<a href='{next}'><img src='{pic}'></a><br>")
 	result.append(imgtext)
 	result.append(navtext)
 	result.append(footer_text)
+	#write to disk
 	try:
 		with open(path, "w") as ff:
 			ff.writelines(result)
@@ -100,7 +104,6 @@ def generateThumbnail(path, target):
 	TODO: hq mode, it currently only emits GIFs
 	"""
 	#select which command to run
-	#could
 	if mode=="gray":
 		command=["convert", path, "-resize", f"{x_size}x{y_size}", "-background", "white", "-gravity", "center", "-extent", f"{x_size}x{y_size}", "-quantize", "Gray", "-colors", "8", "+dither", target]
 	elif mode=="color":
@@ -131,13 +134,18 @@ def createGallery():
 	Returns False if something went wrong, and True on success.
 	"""
 	images=getFileList(gallery_name)
+	images_lucky=images.copy()
+	random.shuffle(images_lucky)
 	length=len(images)
 	page_data=[f"<html><head><title>{gallery_name_clean} gallery</title></head> <body>[{gallery_name_clean}]<br>images: {length}<hr>"]
 	#deeply unpythonic things because the index value is extremely important in making this work
+	print(f"to-gallery.py v{version_string}.")
+
 	print(f"Generating gallery '{gallery_name_clean}' with {length} images:")
 	for ii in range(0,length):
 		#current filename
 		image=images[ii]
+		image_lucky=images_lucky[ii]
 		#stuff for the per-image page, this probably needs to get moved (TODO)
 		image_prev=images[(ii-1)%length]
 		image_next=images[(ii+1)%length]
@@ -154,7 +162,7 @@ def createGallery():
 		else:
 			print(f"notice: skipping thumbnail generation for '{image}'.")
 		print(f"Generating page in '{page_target}'...")
-		if not generatePage(image, image_prev, image_next, ii+1, length):
+		if not generatePage(image, image_prev, image_next, ii+1, length, image_lucky):
 			print(f"error: could not generate page '{page_target}'! Gallery navigation will be somewhat broken.")
 		#add each generated thumbnail
 		if os.path.exists(thumb_target):

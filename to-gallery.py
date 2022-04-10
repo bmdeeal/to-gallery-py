@@ -1,32 +1,38 @@
 #!/usr/bin/env python3
 
-#to-gallery.py -- generate a basic html thumbnail gallery for a folder of images
+"""
+to-gallery.py -- generate a basic html thumbnail gallery for a folder of images
 #usage: to-gallery.py [-mode color|gray|hq] [-xsize size] [-ysize size] [-regenerate] galleryname
 
-# (C) 2021, 2022 B.M.Deeal
+---
+
+(C) 2021, 2022 B.M.Deeal
 #Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby granted, provided that the above copyright notice and this permission notice appear in all copies.
 
-#THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-# Requires imagemagick to be available in $PATH. Tested on Ubuntu 18.04 on WSL with Python 3.8.5.
+---
 
-#This is a Python re-implementation of a shell script I'd written to do this exact task. Python is dramatically nicer to use for something like this, even if it took quite a bit longer to write (even if that just means it took most of an evening into the morning, rather than just the evening and then I went to bed at a reasonable hour, lol).
+Requires imagemagick to be available in $PATH. Tested on Ubuntu 20.04 on WSL with Python 3.8.5.
 
-#Although this program will blindly accept .png images as valid gallery targets to disply, the target device this I wrote this utility to generate galleries for doesn't support .png since it's an old CE2.0 palmtop. This script could handle that conversion if needed, but most pictures need a lot of manual TLC to get looking decent on a pea-green monochrome LCD display where you're constantly adjusting the contrast depending on what is being displayed.
-#This is why the defaults are the way they are -- grayscale 64x64 .gif thumbnails on extremely plain Web 1.0 style pages. The device supports .jpg, but decoding JPEG files on a late 90s handheld device is VERY slow.
-#Same thing with the color setting: I have another, quite a bit faster CE2.11 device with color that is more okay with JPEG, but it's still way faster working with .gif files vs .jpg on it, and high-quality (like 85 quality) files are still kinda slow to decode.
+This is a Python re-implementation of a shell script I'd written to do this exact task. Python is dramatically nicer to use for something like this, even if it took quite a bit longer to write (even if that just means it took most of an evening into the morning, rather than just the evening and then I went to bed at a reasonable hour, lol).
 
-#This is not a production grade piece of software, this is a little utility that lets me use obsolete handheld devices as a convenient photo gallery.
+This program will blindly accept any image formats as valid gallery targets to display, but the target device this I wrote this utility to generate galleries for doesn't support .png since it's an old CE2.0 palmtop. This script could handle that conversion if needed, but most pictures need a lot of manual TLC to get looking decent on a pea-green monochrome LCD display where you're constantly adjusting the contrast depending on what is being displayed.
+This is why the defaults are the way they are -- grayscale 64x64 .gif thumbnails on extremely plain Web 1.0 style pages. The device supports .jpg, but decoding JPEG files on a late 90s handheld device is VERY slow.
+Same thing with the color setting: I have another, quite a bit faster CE2.11 device with color that is more okay with JPEG, but it's still way faster working with .gif files vs .jpg on it, and high-quality (like 85 quality) files are still somewhat slow to decode.
 
-#This script isn't designed to handle arbitrary folder locations currently, it expects you to be in the parent directory of the folder with all the pictures.
-#In short, don't call it like 'to-gallery.py folder/otherfolder'. It might even work, but it is entirely untested and I know the old BASH script that I wrote (and referenced heavily for this) broke badly when you did that.
+This is not a production grade piece of software, this is a little utility that lets me use some obsolete handheld devices as a convenient photo gallery, and may be useful for other purposes.
 
-#TODO: a bunch, but it works right now (every time I finish one or more of these tasks at once, bump the minor version number up, bump the major version number up if I get a ton of them done)
-#TODO: -mode
-#TODO: there are certainly a few spots with terrible error handling right now
-#TODO: test under Windows proper and not just under WSL -- this tries to do the Right Thing and use proper path constructing functions but I might just end up removing all of that because it seems like a bunch of fragile magic that overcomplicates things since windows cheerfully accepts / anyway as the separator; but like, I don't have imagemagick installed under Windows lol
-#TODO: "lucky" image feature, where it generates a shuffled list of images so you can cycle through them in an entire arbitrary order -- like random sort, but because this is static, you can't really do an acutal random sort lol, I'd ideally want to make sure that hitting lucky repeatedly will never get stuck in a loop before showing all the images, but honestly, just a basic, "dumb" shuffle option would be nice [done, but needs refinement]
-#TODO: modern mode that uses a nice HTML5 layout so you can have nice CSS theming, and it'd even include a default stylesheet if one doesn't already exist, would probably end up being a version 2.0 feature -- the current layout isn't unthemeable, but it's also not laid out for it either and doesn't include a stylesheet link
+This script isn't designed to handle arbitrary folder locations currently, it expects you to be in the parent directory of the folder with all the pictures.
+Don't call it like 'to-gallery.py folder/otherfolder'. It might even work, but it is entirely untested and I know the old BASH script that I wrote (and referenced heavily for this) broke badly when you did that.
+
+TODO list:
+* the ability to disable certain features from the page (eg, lucky mode, rotated images)
+* modern mode that uses a nice HTML5 layout so you can have nice CSS theming, and it'd even include a default stylesheet if one doesn't already exist
+* there are certainly a few spots with insufficient error handling
+* test under Windows proper and not just under WSL -- this tries to do the Right Thing and use proper path constructing functions but I might just end up removing all of that because it seems like a bunch of fragile magic that overcomplicates things since windows cheerfully accepts '/' anyway as the separator
+
+"""
 
 import sys
 import os
@@ -35,9 +41,9 @@ import datetime
 import random
 
 #important globals
-version_major="1"
-version_minor="5"
-version_suffix="release" #could be alpha, beta, or release
+version_major="1" #will probably bump this to 2.0 once I add CSS theming.
+version_minor="6"
+version_suffix="beta" #could be alpha, beta, or release
 version_string=f"{version_major}.{version_minor}-{version_suffix}"
 default_size=64
 x_size=default_size
@@ -46,8 +52,9 @@ gallery_name=""
 gallery_name_clean="" #no trailing slash or whatever
 thumb_dir="g-thumbs"
 page_dir="g-pages"
+rotate_dir="r-pics"
 regenerate=False #whether to re-create the thumbnails (pages are always re-created, since the order may have changed)
-mode="gray" #could be gray, color, or hq - gray and color are .gif format, hq generates modern .jpg thumbnails in color (not implemented yet)
+mode="gray" #could be gray, color, or hq - gray and color are .gif format, hq generates modern .jpg thumbnails in color
 result_ext="gif" #gif under gray/color, jpg under hq
 footer_text=f"<hr>Generated on {datetime.date.today().strftime('%B %d, %Y')} with to-gallery.py, version {version_string}<br> Script (C) 2021, 2022 B.M.Deeal.</body></html>"
 
@@ -66,7 +73,7 @@ def helpScreen():
 def generatePage(image, image_prev, image_next, number, end, lucky="#"):
 	"""
 	Generate per-image pages so you can navigate in-order through the gallery.
-	This function needs to be refactored, or at least its signature does, lol. Oh well.
+	This function needs to be refactored, or at least its signature does.
 	"""
 	#build filenames
 	path=os.path.join(gallery_name, page_dir, f"{image}.html")
@@ -75,12 +82,16 @@ def generatePage(image, image_prev, image_next, number, end, lucky="#"):
 	lucky=f"{lucky}.html"
 	thumb_prev=os.path.join("..", thumb_dir, f"{image_prev}.{result_ext}")
 	thumb_next=os.path.join("..", thumb_dir, f"{image_next}.{result_ext}")
+	rotate_img=os.path.join("..", rotate_dir, f"{image}.{result_ext}")
 	top=os.path.join("..","..",f"{gallery_name_clean}.html")
 	pic=os.path.join("..", image)
-	title=image #TODO: might remove the extension
-	#build page data
+	title=image #TODO: might remove the extension?
+	#build page data:
+	#final page data
 	result=[f"<html><head><title>{title}</title></head> <body>image {number} of {end}<br>[{title}]<hr>"]
-	navtext=f"<a href='{prev}'>prev</a> | <a href='{next}'>next</a> | <a href='{top}'>index</a> | <a href='{pic}'>image</a> | <a href='{lucky}'>lucky</a><br>"
+	#text navigation strip
+	navtext=f"<a href='{prev}'>prev</a> | <a href='{next}'>next</a> | <a href='{top}'>index</a> | <a href='{pic}'>image</a> | <a href='{lucky}'>lucky</a> | <a href='{rotate_img}'>rotate</a><br>"
+	#image navigation
 	imgtext=f"<a href='{prev}'><img src='{thumb_prev}' width={x_size} height={y_size}></a><a href='{next}'><img src='{thumb_next}' width={x_size} height={y_size}></a><br>"
 	#emit page data
 	result.append(navtext)
@@ -98,16 +109,30 @@ def generatePage(image, image_prev, image_next, number, end, lucky="#"):
 		return False
 	return True
 
+def generateRotation(path, target):
+	"""
+	Generate a rotated version of the image.
+	TODO: resize settings (currently, we clamp to 600 width so the rotated image fits on the 640px wide display on a typical Windows CE H/PC device)
+	"""
+	if mode!="hq":
+		command=["convert", path, "-rotate", "90", "-resize", "600>", "-colors", "32", target]
+	else:
+		command=["convert", path, "-rotate", "90", target]
+	if subprocess.run(command).returncode != 0:
+		return False
+	return True
+
 def generateThumbnail(path, target):
 	"""
 	Generate the thumbnail for an image.
-	TODO: hq mode, it currently only emits GIFs
 	"""
 	#select which command to run
 	if mode=="gray":
 		command=["convert", path, "-resize", f"{x_size}x{y_size}", "-background", "white", "-gravity", "center", "-extent", f"{x_size}x{y_size}", "-quantize", "Gray", "-colors", "8", "+dither", target]
 	elif mode=="color":
 		command=["convert", path, "-resize", f"{x_size}x{y_size}", "-background", "white", "-gravity", "center", "-extent", f"{x_size}x{y_size}", "-quantize", "sRGB", "-colors", "24", "+dither", target]
+	elif mode=="hq":
+		command=["convert", path, "-resize", f"{x_size}x{y_size}", "-background", "white", "-gravity", "center", "-extent", f"{x_size}x{y_size}", target]
 	else:
 		print(f"error: invalid mode '{mode}'!")
 		return False
@@ -118,12 +143,13 @@ def generateThumbnail(path, target):
 
 def generateFolders():
 	"""
-	Generate the two target folders.
+	Generate the target folders.
 	Returns False if they couldn't be created (and not just because they already exist), True otherwise.
 	"""
 	try:
 		os.makedirs(os.path.join(gallery_name,thumb_dir),exist_ok=True)
 		os.makedirs(os.path.join(gallery_name,page_dir),exist_ok=True)
+		os.makedirs(os.path.join(gallery_name,rotate_dir),exist_ok=True)
 	except OSError:
 		return False
 	return True
@@ -138,10 +164,9 @@ def createGallery():
 	random.shuffle(images_lucky)
 	length=len(images)
 	page_data=[f"<html><head><title>{gallery_name_clean} gallery</title></head> <body>[{gallery_name_clean}]<br>images: {length}<hr>"]
-	#deeply unpythonic things because the index value is extremely important in making this work
 	print(f"to-gallery.py v{version_string}.")
-
 	print(f"Generating gallery '{gallery_name_clean}' with {length} images:")
+	#deeply unpythonic loop
 	for ii in range(0,length):
 		#current filename
 		image=images[ii]
@@ -153,14 +178,26 @@ def createGallery():
 		page_target=os.path.join(gallery_name, page_dir, f"{image}.html")
 		#where to put the thumbnail
 		thumb_target=os.path.join(gallery_name, thumb_dir, f"{image}.{result_ext}")
+		#where to put rotated images
+		rotate_target=os.path.join(gallery_name, rotate_dir, f"{image}.{result_ext}")
 		#generate everything, complain on error
 		print(f"\nNow processing '{image}' (image {ii+1} of {length}):")
+		#generate thumbnails
 		if regenerate or not os.path.isfile(thumb_target):
 			print(f"Generating thumbnail in '{thumb_target}'...")
 			if not generateThumbnail(image_target, thumb_target):
 				print(f"warning: could not generate '{thumb_target}'.")
 		else:
 			print(f"notice: skipping thumbnail generation for '{image}'.")
+		#generate rotated images
+		#TODO: flag to disable
+		if regenerate or not os.path.isfile(rotate_target):
+			print(f"Generating rotated image in '{rotate_target}'...")
+			if not generateRotation(image_target, rotate_target):
+				print(f"warning: could not generate '{rotate_target}'.")
+		else:
+			print(f"notice: skipping rotated image generation for '{image}'.")
+		#create pages
 		print(f"Generating page in '{page_target}'...")
 		if not generatePage(image, image_prev, image_next, ii+1, length, image_lucky):
 			print(f"error: could not generate page '{page_target}'! Gallery navigation will be somewhat broken.")
@@ -216,7 +253,7 @@ def parseArgs():
 	Parse each of the arguments from the command line.
 	Returns True if everything went okay, False otherwise.
 	"""
-	global x_size, y_size, thumbformat, gallery_name, regenerate, gallery_name_clean, mode
+	global x_size, y_size, thumbformat, gallery_name, regenerate, gallery_name_clean, mode, result_ext
 	length=len(sys.argv)
 	#this bit is deeply unpythonic but I dunno how to write it in a nice python way, this really would just be 'for(ii=1, ii<argc; ii++)' in C++ or whatever
 	#we edit the value of ii in a lasting way so we can't even do 'for ii in range(1,len(sys.argv))'
@@ -240,7 +277,7 @@ def parseArgs():
 				if mode==False:
 					mode=""
 				mode=mode.lower()
-				#accept the spelling differences
+				#accept any spelling differences
 				if mode=="grey":
 					mode="gray"
 				if mode=="colour":
@@ -250,7 +287,7 @@ def parseArgs():
 					result_ext="jpg"
 				if not mode in ("color", "gray", "hq"):
 					print(f"error: invalid mode '{mode}'!")
-					print("Valid modes are 'color', 'gray', 'hq' (not implemented)")
+					print("Valid modes are 'color', 'gray', 'hq'.")
 					return False
 			#get help
 			elif current=="-help":

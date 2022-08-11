@@ -42,7 +42,7 @@ import random
 
 #important globals
 version_major="1" #will probably bump this to 2.0 once I add CSS theming.
-version_minor="6"
+version_minor="7"
 version_suffix="beta" #could be alpha, beta, or release
 version_string=f"{version_major}.{version_minor}-{version_suffix}"
 default_size=64
@@ -50,6 +50,7 @@ x_size=default_size
 y_size=default_size
 gallery_name=""
 gallery_name_clean="" #no trailing slash or whatever
+gallery_name_clean_list="" 
 thumb_dir="g-thumbs"
 page_dir="g-pages"
 rotate_dir="r-pics"
@@ -84,13 +85,14 @@ def generatePage(image, image_prev, image_next, number, end, lucky="#"):
 	thumb_next=os.path.join("..", thumb_dir, f"{image_next}.{result_ext}")
 	rotate_img=os.path.join("..", rotate_dir, f"{image}.{result_ext}")
 	top=os.path.join("..","..",f"{gallery_name_clean}.html")
+	top_list=os.path.join("..","..",f"{gallery_name_clean_list}.html")
 	pic=os.path.join("..", image)
 	title=image #TODO: might remove the extension?
 	#build page data:
 	#final page data
 	result=[f"<html><head><title>{title}</title></head> <body>image {number} of {end}<br>[{title}]<hr>"]
 	#text navigation strip
-	navtext=f"<a href='{prev}'>prev</a> | <a href='{next}'>next</a> | <a href='{top}'>index</a> | <a href='{pic}'>image</a> | <a href='{lucky}'>lucky</a> | <a href='{rotate_img}'>rotate</a><br>"
+	navtext=f"<a href='{prev}'>prev</a> | <a href='{next}'>next</a> | <a href='{top}'>index (grid)</a> | <a href='{top_list}'>index (list)</a> | <a href='{pic}'>image</a> | <a href='{lucky}'>lucky</a> | <a href='{rotate_img}'>rotate</a><br>"
 	#image navigation
 	imgtext=f"<a href='{prev}'><img src='{thumb_prev}' width={x_size} height={y_size}></a><a href='{next}'><img src='{thumb_next}' width={x_size} height={y_size}></a><br>"
 	#emit page data
@@ -115,7 +117,7 @@ def generateRotation(path, target):
 	TODO: resize settings (currently, we clamp to 600 width so the rotated image fits on the 640px wide display on a typical Windows CE H/PC device)
 	"""
 	if mode!="hq":
-		command=["convert", path, "-rotate", "90", "-resize", "600>", "-colors", "32", target]
+		command=["convert", path, "-rotate", "90", "-resize", "600>", "-interlace", "line", "-colors", "32", target]
 	else:
 		command=["convert", path, "-rotate", "90", target]
 	if subprocess.run(command).returncode != 0:
@@ -128,7 +130,7 @@ def generateThumbnail(path, target):
 	"""
 	#select which command to run
 	if mode=="gray":
-		command=["convert", path, "-resize", f"{x_size}x{y_size}", "-background", "white", "-gravity", "center", "-extent", f"{x_size}x{y_size}", "-quantize", "Gray", "-colors", "8", "+dither", target]
+		command=["convert", path, "-resize", f"{x_size}x{y_size}", "-background", "white", "-gravity", "center", "-extent", f"{x_size}x{y_size}", "-unsharp", "1x0.7+2.5", "-quantize", "Gray", "-colors", "8", "+dither", target]
 	elif mode=="color":
 		command=["convert", path, "-resize", f"{x_size}x{y_size}", "-background", "white", "-gravity", "center", "-extent", f"{x_size}x{y_size}", "-quantize", "sRGB", "-colors", "24", "+dither", target]
 	elif mode=="hq":
@@ -156,14 +158,18 @@ def generateFolders():
 
 def createGallery():
 	"""
-	Loop through the file list and generate everything.
+	Loop through the file list and generate the main gallery pages.
 	Returns False if something went wrong, and True on success.
 	"""
 	images=getFileList(gallery_name)
 	images_lucky=images.copy()
 	random.shuffle(images_lucky)
 	length=len(images)
-	page_data=[f"<html><head><title>{gallery_name_clean} gallery</title></head> <body>[{gallery_name_clean}]<br>images: {length}<hr>"]
+	#the main grid-view gallery page
+	page_grid_data=[f"<html><head><title>{gallery_name_clean} gallery</title></head> <body>[{gallery_name_clean}]<br>images: {length}<br>grid view | <a href='{gallery_name_clean_list}.html'>[list view]</a><hr>"]
+	#the list-view gallery page
+	page_list_data=[f"<html><head><title>{gallery_name_clean} gallery</title></head> <body>[{gallery_name_clean}]<br>images: {length}<br>list view | <a href='{gallery_name_clean}.html'>[grid view]</a><hr>"]
+	#emit info
 	print(f"to-gallery.py v{version_string}.")
 	print(f"Generating gallery '{gallery_name_clean}' with {length} images:")
 	#deeply unpythonic loop
@@ -203,16 +209,24 @@ def createGallery():
 			print(f"error: could not generate page '{page_target}'! Gallery navigation will be somewhat broken.")
 		#add each generated thumbnail
 		if os.path.exists(thumb_target):
-			page_data.append(f"<a href='{page_target}'><img src='{thumb_target}' width={x_size} height={y_size}></a>")
+			page_grid_data.append(f"<a href='{page_target}'><img src='{thumb_target}' width={x_size} height={y_size}></a>")
+			page_list_data.append(f"<a href='{page_target}'><img src='{thumb_target}' width={x_size} height={y_size}>{image}</a><br>")
 	#insert the footer and write out
-	page_data.append(footer_text)
+	page_grid_data.append(footer_text)
+	page_list_data.append(footer_text)
 	try:
 		with open(f"{gallery_name_clean}.html", "w") as ff:
-			ff.writelines(page_data)
+			ff.writelines(page_grid_data)
 	except OSError as ee:
-		print(f"error: could not write gallery file! ({ee})")
+		print(f"error: could not write '{gallery_name_clean}.html'! ({ee})")
 		return False
-	print(f"\nGenerated html gallery page '{gallery_name_clean}.html'.")
+	try:
+		with open(f"{gallery_name_clean_list}.html", "w") as ff:
+			ff.writelines(page_list_data)
+	except OSError as ee:
+		print(f"error: could not write '{gallery_name_clean_list}.html'! ({ee})")
+		return False
+	print(f"\nGenerated html gallery pages '{gallery_name_clean}.html' and '{gallery_name_clean_list}.html'.")
 	return True
 
 def getFileList(path):
@@ -253,7 +267,7 @@ def parseArgs():
 	Parse each of the arguments from the command line.
 	Returns True if everything went okay, False otherwise.
 	"""
-	global x_size, y_size, thumbformat, gallery_name, regenerate, gallery_name_clean, mode, result_ext
+	global x_size, y_size, thumbformat, gallery_name, regenerate, gallery_name_clean, gallery_name_clean_list, mode, result_ext
 	length=len(sys.argv)
 	#this bit is deeply unpythonic but I dunno how to write it in a nice python way, this really would just be 'for(ii=1, ii<argc; ii++)' in C++ or whatever
 	#we edit the value of ii in a lasting way so we can't even do 'for ii in range(1,len(sys.argv))'
@@ -326,6 +340,7 @@ def parseArgs():
 			gallery_name_clean=gallery_name.strip()
 			if gallery_name[-1]=="\\" or gallery_name[-1]=="/":
 				gallery_name_clean=gallery_name_clean[:-1]
+			gallery_name_clean_list=f"{gallery_name_clean}-list"
 		#again, deeeeeeply unpythonic
 		ii+=1
 	return True

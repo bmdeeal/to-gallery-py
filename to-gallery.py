@@ -27,7 +27,7 @@ This script isn't designed to handle arbitrary folder locations currently, it ex
 Don't call it like 'to-gallery.py folder/otherfolder'. It might even work, but it is entirely untested and I know the old BASH script that I wrote (and referenced heavily for this) broke badly when you did that.
 
 TODO list:
-* the ability to disable certain features from the page (eg, lucky mode, rotated images)
+* the ability to disable certain features from the page (eg, lucky mode, rotated images, thumbnails -- this one is VERY important since I forgot that because I'm using this on a CE2.0 device with a 2GB CF card, each tiny thumbnail still takes up a gigantic 32kB, multiply that by hundreds of pictures and you're looking at 30x overhead) [IN PROGRESS!]
 * modern mode that uses a nice HTML5 layout so you can have nice CSS theming, and it'd even include a default stylesheet if one doesn't already exist
 * there are certainly a few spots with insufficient error handling
 * test under Windows proper and not just under WSL -- this tries to do the Right Thing and use proper path constructing functions but I might just end up removing all of that because it seems like a bunch of fragile magic that overcomplicates things since windows cheerfully accepts '/' anyway as the separator
@@ -42,8 +42,8 @@ import random
 
 #important globals
 version_major="1" #will probably bump this to 2.0 once I add CSS theming.
-version_minor="7"
-version_suffix="beta" #could be alpha, beta, or release
+version_minor="8"
+version_suffix="alpha" #could be alpha, beta, or release
 version_string=f"{version_major}.{version_minor}-{version_suffix}"
 default_size=64
 x_size=default_size
@@ -54,6 +54,8 @@ gallery_name_clean_list=""
 thumb_dir="g-thumbs"
 page_dir="g-pages"
 rotate_dir="r-pics"
+thumb_active=True
+rotate_active=True
 regenerate=False #whether to re-create the thumbnails (pages are always re-created, since the order may have changed)
 mode="gray" #could be gray, color, or hq - gray and color are .gif format, hq generates modern .jpg thumbnails in color
 result_ext="gif" #gif under gray/color, jpg under hq
@@ -97,9 +99,11 @@ def generatePage(image, image_prev, image_next, number, end, lucky="#"):
 	imgtext=f"<a href='{prev}'><img src='{thumb_prev}' width={x_size} height={y_size}></a><a href='{next}'><img src='{thumb_next}' width={x_size} height={y_size}></a><br>"
 	#emit page data
 	result.append(navtext)
-	result.append(imgtext)
+	if thumb_active:
+		result.append(imgtext)
 	result.append(f"<a href='{next}'><img src='{pic}'></a><br>")
-	result.append(imgtext)
+	if thumb_active:
+		result.append(imgtext)
 	result.append(navtext)
 	result.append(footer_text)
 	#write to disk
@@ -189,14 +193,14 @@ def createGallery():
 		#generate everything, complain on error
 		print(f"\nNow processing '{image}' (image {ii+1} of {length}):")
 		#generate thumbnails
-		if regenerate or not os.path.isfile(thumb_target):
+		if thumb_active and (regenerate or not os.path.isfile(thumb_target)):
 			print(f"Generating thumbnail in '{thumb_target}'...")
 			if not generateThumbnail(image_target, thumb_target):
 				print(f"warning: could not generate '{thumb_target}'.")
 		else:
 			print(f"notice: skipping thumbnail generation for '{image}'.")
 		#generate rotated images
-		#TODO: flag to disable
+		#if rotate_active: #TODO
 		if regenerate or not os.path.isfile(rotate_target):
 			print(f"Generating rotated image in '{rotate_target}'...")
 			if not generateRotation(image_target, rotate_target):
@@ -208,18 +212,24 @@ def createGallery():
 		if not generatePage(image, image_prev, image_next, ii+1, length, image_lucky):
 			print(f"error: could not generate page '{page_target}'! Gallery navigation will be somewhat broken.")
 		#add each generated thumbnail
-		if os.path.exists(thumb_target):
-			page_grid_data.append(f"<a href='{page_target}'><img src='{thumb_target}' width={x_size} height={y_size}></a>")
-			page_list_data.append(f"<a href='{page_target}'><img src='{thumb_target}' width={x_size} height={y_size}>{image}</a><br>")
+		if thumb_active:
+			if os.path.exists(thumb_target):
+				page_grid_data.append(f"<a href='{page_target}'><img src='{thumb_target}' width={x_size} height={y_size}></a>")
+				page_list_data.append(f"<a href='{page_target}'><img src='{thumb_target}' width={x_size} height={y_size}>{image}</a><br>")
+		else:
+			page_list_data.append(f"<a href='{page_target}'>{image}</a><br>")
 	#insert the footer and write out
 	page_grid_data.append(footer_text)
 	page_list_data.append(footer_text)
-	try:
-		with open(f"{gallery_name_clean}.html", "w") as ff:
-			ff.writelines(page_grid_data)
-	except OSError as ee:
-		print(f"error: could not write '{gallery_name_clean}.html'! ({ee})")
-		return False
+	#generate the thumbnail page
+	if thumb_active:
+		try:
+			with open(f"{gallery_name_clean}.html", "w") as ff:
+				ff.writelines(page_grid_data)
+		except OSError as ee:
+			print(f"error: could not write '{gallery_name_clean}.html'! ({ee})")
+			return False
+	#generate the file list page
 	try:
 		with open(f"{gallery_name_clean_list}.html", "w") as ff:
 			ff.writelines(page_list_data)
@@ -267,7 +277,7 @@ def parseArgs():
 	Parse each of the arguments from the command line.
 	Returns True if everything went okay, False otherwise.
 	"""
-	global x_size, y_size, thumbformat, gallery_name, regenerate, gallery_name_clean, gallery_name_clean_list, mode, result_ext
+	global x_size, y_size, thumbformat, gallery_name, regenerate, gallery_name_clean, gallery_name_clean_list, mode, result_ext, rotate_active, thumb_active
 	length=len(sys.argv)
 	#this bit is deeply unpythonic but I dunno how to write it in a nice python way, this really would just be 'for(ii=1, ii<argc; ii++)' in C++ or whatever
 	#we edit the value of ii in a lasting way so we can't even do 'for ii in range(1,len(sys.argv))'
@@ -282,9 +292,10 @@ def parseArgs():
 		if current.startswith("--"):
 			current=current[1:]
 		#all the arguments have a leading dash
+		#TODO: should handle "--" on its own to indicate end of argument list
 		if current.startswith("-"):
 			#output format mode
-			if current=="-mode":
+			if current in ("-mode", "-m"):
 				ii+=1
 				mode=getStr(sys.argv, ii)
 				#handle a blank mode
@@ -304,7 +315,7 @@ def parseArgs():
 					print("Valid modes are 'color', 'gray', 'hq'.")
 					return False
 			#get help
-			elif current=="-help":
+			elif current in ("-help", "-?", "-h"):
 				helpScreen()
 				sys.exit(0)
 			#x-size of thumbnail
@@ -322,8 +333,14 @@ def parseArgs():
 					print(f"error: could not parse ysize! Using default of {default_size}...")
 					y_size=default_size
 			#regenerate all thumbnails
-			elif current=="-regenerate":
+			elif current in ("-regenerate", "-r"):
 				regenerate=True
+			#disable thumbnail images (TODO)
+			elif current in ("-nothumbnails", "-nT"):
+				thumb_active=False
+			#disable rotated images (TODO)
+			elif current in ("-norotate", "-nR"):
+				rotate_active=False
 			#nothing
 			else:
 				print(f"error: invalid argument '{current_orig}'!")
@@ -358,6 +375,7 @@ def main():
 	#check if a target directory was passed
 	#this should be a stricter check to be honest, but eh
 	if gallery_name.strip()=="":
+		helpScreen()
 		print("fatal error: no image folder name given!")
 		sys.exit(1)
 	#setup the two folders

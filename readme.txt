@@ -23,23 +23,34 @@ This utility is an updated version of a quick-and-dirty Bash script I wrote, and
 PARAMETERS:
 There are several parameters:
 
-* -xsize (width), -ysize (height)
+* -xsize/-sX (width), -ysize/-sY (height)
 Set the size of the thumbnails in pixels.
 
-* -mode color/gray/hq
+
+* -mode/-m color/gray/hq
 Set the thumbnail output mode.
 	color: color dithered .gif format thumbnail
 	gray: .grayscale dithered gif format grayscale thumbnail (default)
 	hq: color .jpg format thumbnail (currently unimplemented, use '-mode color' for now)
 
-* -regenerate
+* -regenerate/-r
 Re-create all of the thumbnails instead of skipping pictures that already have them.
 
-* -help
-Display help on how to use the program.
+* -help/-h/-?
+Display a brief help on how to use the program.
+
+* -nothumbnails/-nT
+Disable thumbnail generation, modifies pages to not use them.
+
+* -norotate/-nR
+Disable rotated image generation, and disables the rotate link on pages.
+
+* -nolucky/-nL
+Disables the 'lucky' image link button, which would link to a randomly selected (at gallery creation time) image.
 
 All arguments will accept one or two dashes before them (eg, --regenerate is a valid command).
-Currently, there is no command to stop argument processing, so it will not work on folders starting with a dash.
+Arguments are case-sensitive.
+Currently, there is no command to stop argument processing, so it will not work on folders starting with a dash..
 
 ---
 INSTALLATION:

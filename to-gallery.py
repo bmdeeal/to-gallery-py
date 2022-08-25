@@ -43,14 +43,14 @@ import random
 #important globals
 version_major="1" #will probably bump this to 2.0 once I add CSS theming.
 version_minor="8"
-version_suffix="beta" #could be alpha, beta, or release
+version_suffix="beta2" #could be alpha, beta, or release
 version_string=f"{version_major}.{version_minor}-{version_suffix}"
 default_size=64
 x_size=default_size
 y_size=default_size
 gallery_name=""
 gallery_name_clean="" #no trailing slash or whatever
-gallery_name_clean_list="" 
+gallery_name_clean_list=""
 thumb_dir="g-thumbs"
 page_dir="g-pages"
 rotate_dir="r-pics"
@@ -58,6 +58,8 @@ thumb_active=True #generate thumbnails?
 rotate_active=True #generate rotated images?
 lucky_active=True #enable the lucky image link?
 regenerate=False #whether to re-create the thumbnails (pages are always re-created, since the order may have changed)
+regenerate_thumbs=False
+regenerate_rotate=False
 mode="gray" #could be gray, color, or hq - gray and color are .gif format, hq generates modern .jpg thumbnails in color
 result_ext="gif" #gif under gray/color, jpg under hq
 footer_text=f"<hr>Generated on {datetime.date.today().strftime('%B %d, %Y')} with to-gallery.py, version {version_string}<br> Script (C) 2021, 2022 B.M.Deeal.</body></html>"
@@ -70,7 +72,7 @@ def helpScreen():
 	"""
 	print(f"to-gallery.py v{version_string}\nUtility to generate a basic HTML thumbnail gallery for a folder of images.")
 	print("(C) 2021, 2022 B.M.Deeal. Distributed under the ISC license.\n")
-	print("usage: to-gallery.py [-mode color|gray|hq] [-xsize size] [-ysize size] [-regenerate] [-nothumbnails] [-norotate] [-nolucky] galleryname")
+	print("usage: to-gallery.py [-mode color|gray|hq] [-xsize size] [-ysize size] [-squaresize size] [-regenerate] [-regenerate-thumbs] [-regenerate-rotated] [-nothumbnails] [-norotate] [-nolucky] galleryname")
 	print("For example, to generate a my-pics.html file for a folder named my-pics in the current directory, with 160x120 JPG thumbnails, you might do:")
 	print("    to-gallery.py -mode hq -xsize 160 -ysize 120 -regenerate my-pics")
 
@@ -147,9 +149,9 @@ def generateThumbnail(path, target):
 	"""
 	#select which command to run
 	if mode=="gray":
-		command=["convert", path, "-resize", f"{x_size}x{y_size}", "-background", "white", "-gravity", "center", "-extent", f"{x_size}x{y_size}", "-unsharp", "1x0.7+2.5", "-quantize", "Gray", "-colors", "8", "+dither", target]
+		command=["convert", path, "-resize", f"{x_size}x{y_size}", "-background", "white", "-gravity", "center", "-extent", f"{x_size}x{y_size}", "-unsharp", "1x0.7+2.5", "-quantize", "Gray", "-colors", "8", "+dither", "-interlace", "GIF", target]
 	elif mode=="color":
-		command=["convert", path, "-resize", f"{x_size}x{y_size}", "-background", "white", "-gravity", "center", "-extent", f"{x_size}x{y_size}", "-quantize", "sRGB", "-colors", "24", "+dither", target]
+		command=["convert", path, "-resize", f"{x_size}x{y_size}", "-background", "white", "-gravity", "center", "-extent", f"{x_size}x{y_size}", "-quantize", "sRGB", "-colors", "24", "+dither", "-interlace", "GIF", target]
 	elif mode=="hq":
 		command=["convert", path, "-resize", f"{x_size}x{y_size}", "-background", "white", "-gravity", "center", "-extent", f"{x_size}x{y_size}", target]
 	else:
@@ -210,7 +212,7 @@ def createGallery():
 		#generate everything, complain on error
 		print(f"\nNow processing '{image}' (image {ii+1} of {length}):")
 		#generate thumbnails
-		if thumb_active and (regenerate or not os.path.isfile(thumb_target)):
+		if thumb_active and (regenerate or regenerate_thumbs or not os.path.isfile(thumb_target)):
 			print(f"Generating thumbnail in '{thumb_target}'...")
 			if not generateThumbnail(image_target, thumb_target):
 				print(f"warning: could not generate '{thumb_target}'.")
@@ -218,7 +220,7 @@ def createGallery():
 			print(f"notice: skipping thumbnail generation for '{image}'.")
 		#generate rotated images
 		#if rotate_active: #TODO
-		if rotate_active and (regenerate or not os.path.isfile(rotate_target)):
+		if rotate_active and (regenerate or regenerate_rotate or not os.path.isfile(rotate_target)):
 			print(f"Generating rotated image in '{rotate_target}'...")
 			if not generateRotation(image_target, rotate_target):
 				print(f"warning: could not generate '{rotate_target}'.")
@@ -294,7 +296,9 @@ def parseArgs():
 	Parse each of the arguments from the command line.
 	Returns True if everything went okay, False otherwise.
 	"""
-	global x_size, y_size, thumbformat, gallery_name, regenerate, gallery_name_clean, gallery_name_clean_list, mode, result_ext, rotate_active, thumb_active, lucky_active
+	#TODO: maybe we could have some system to register arguments with a short description, I dunno, would help with help a lot.
+	#disgusting pile of globals
+	global x_size, y_size, thumbformat, gallery_name, regenerate, gallery_name_clean, gallery_name_clean_list, mode, result_ext, rotate_active, thumb_active, lucky_active, regenerate_thumbs, regenerate_rotate
 	length=len(sys.argv)
 	#this bit is deeply unpythonic but I dunno how to write it in a nice python way, this really would just be 'for(ii=1, ii<argc; ii++)' in C++ or whatever
 	#we edit the value of ii in a lasting way so we can't even do 'for ii in range(1,len(sys.argv))'
@@ -335,6 +339,15 @@ def parseArgs():
 			elif current in ("-help", "-?", "-h"):
 				helpScreen()
 				sys.exit(0)
+			#square sized thumbnail size
+			elif current in ("-squaresize", "-sS"):
+				ii+=1
+				x_size=getInt(sys.argv, ii)
+				y_size=x_size
+				if x_size==False:
+					print(f"error: could not parse size! Using default of {default_size}...")
+					x_size=default_size
+					y_size=x_size
 			#x-size of thumbnail
 			elif current in ("-xsize", "-sX"):
 				ii+=1
@@ -349,9 +362,15 @@ def parseArgs():
 				if y_size==False:
 					print(f"error: could not parse ysize! Using default of {default_size}...")
 					y_size=default_size
-			#regenerate all thumbnails
+			#regenerate all thumbnails+rotated images
 			elif current in ("-regenerate", "-r"):
 				regenerate=True
+			#regenerate all thumbnails
+			elif current in ("-regenerate-thumbs", "-rT"):
+				regenerate_thumbs=True
+			#regenerate all rotated images
+			elif current in ("-regenerate-rotated", "-rR"):
+				regenerate_thumbs=True
 			#disable thumbnail images
 			elif current in ("-nothumbnails", "-nT"):
 				thumb_active=False

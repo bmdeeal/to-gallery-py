@@ -2,7 +2,7 @@
 
 """
 to-gallery.py -- generate a basic html thumbnail gallery for a folder of images
-#usage: to-gallery.py [-mode color|gray|hq] [-xsize size] [-ysize size] [-regenerate] galleryname
+#usage: to-gallery.py [-mode color|gray|hq] [-xsize size] [-ysize size] [-squaresize size] [-regenerate] [-regenerate-thumbs] [-regenerate-rotated] [-nothumbnails] [-norotate] [-nolucky] galleryname
 
 ---
 
@@ -17,20 +17,22 @@ Requires imagemagick to be available in $PATH. Tested on Ubuntu 20.04 on WSL wit
 
 This is a Python re-implementation of a shell script I'd written to do this exact task. Python is dramatically nicer to use for something like this, even if it took quite a bit longer to write (even if that just means it took most of an evening into the morning, rather than just the evening and then I went to bed at a reasonable hour, lol).
 
-This program will blindly accept any image formats as valid gallery targets to display, but the target device this I wrote this utility to generate galleries for doesn't support .png since it's an old CE2.0 palmtop. This script could handle that conversion if needed, but most pictures need a lot of manual TLC to get looking decent on a pea-green monochrome LCD display where you're constantly adjusting the contrast depending on what is being displayed.
-This is why the defaults are the way they are -- grayscale 64x64 .gif thumbnails on extremely plain Web 1.0 style pages. The device supports .jpg, but decoding JPEG files on a late 90s handheld device is VERY slow.
-Same thing with the color setting: I have another, quite a bit faster CE2.11 device with color that is more okay with JPEG, but it's still way faster working with .gif files vs .jpg on it, and high-quality (like 85 quality) files are still somewhat slow to decode.
+This program will blindly accept any image formats as valid gallery targets to display, but the target device this I wrote this utility to generate galleries for doesn't support .png since it's an old CE2.0 palmtop. This script could handle that conversion if needed, which may be added at some point.
+The defaults are the way they are due to this being made for use with a CE2 palmtop -- grayscale .gif thumbnails on extremely plain Web 1.0 style pages. The device supports .jpg, but decoding JPEG files on a late 90s handheld device is VERY slow.
+Same thing with the standard color mode setting: I have another, quite a bit faster CE2.11 device with color that is more okay with JPEG, but it's still way faster working with .gif files vs .jpg on it, and high-quality (like 85 quality) files are still somewhat slow to decode.
 
-This is not a production grade piece of software, this is a little utility that lets me use some obsolete handheld devices as a convenient photo gallery, and may be useful for other purposes.
-This bears repeating: this NOT ROBUST SOFTWARE, do not use it in a situation where robustness is needed. That license bit about how the "software is provided AS-IS" isn't kidding.
+This is not a production grade piece of software. This is a somewhat quick-and-dirty utility that lets me use particularly obsolete handheld devices as a convenient photo gallery, even if this script is likely useful for other purposes.
+This bears repeating: this NOT ROBUST SOFTWARE, do not use it in a situation where robustness is needed (eg, on a website where users can upload files and this script gets called).
+That license bit about how the "software is provided AS-IS" isn't kidding.
 
 For example, this script isn't designed to handle arbitrary folder locations currently, it expects you to be in the parent directory of the folder with all the pictures.
-Don't call it like 'to-gallery.py folder/otherfolder'. It might even work, but it is entirely untested and I know the old BASH script that I wrote (and referenced heavily for this) broke badly when you did that.
+Don't call it like 'to-gallery.py folder/otherfolder'. It might even work, but it is entirely untested and I know the old BASH script that I wrote (and referenced heavily for this, possibly unintentionally leading to the same behavior) broke badly when you did that.
 
 TODO list:
+* imagemap mode for thumbnail grid view, which would also save a LOT of overhead on a CE device with a large memory card -- would still need to generate the thumbnail files, but they could be deleted after? Something like that.
 * modern mode that uses a nice HTML5 layout so you can have nice CSS theming, and it'd even include a default stylesheet if one doesn't already exist
 * there are certainly a few spots with insufficient error handling
-* test under Windows proper and not just under WSL -- this tries to do the Right Thing and use proper path constructing functions but I might just end up removing all of that because it seems like a bunch of fragile magic that overcomplicates things since windows cheerfully accepts '/' anyway as the separator
+* test under Windows proper and not just under WSL -- this tries to do the Right Thing and use proper path constructing functions but I might just end up removing all of that because it seems like a bunch of fragile magic that overcomplicates things since Windows cheerfully accepts '/' anyway as the separator; this isn't a high priority since WSL exists, but it probably shouldn't be mandatory
 
 """
 
@@ -42,10 +44,10 @@ import random
 
 #important globals
 version_major="1" #will probably bump this to 2.0 once I add CSS theming.
-version_minor="8"
-version_suffix="beta2" #could be alpha, beta, or release
+version_minor="9"
+version_suffix="release" #could be alpha, beta, or release
 version_string=f"{version_major}.{version_minor}-{version_suffix}"
-default_size=64
+default_size=80
 x_size=default_size
 y_size=default_size
 gallery_name=""
@@ -111,14 +113,15 @@ def generatePage(image, image_prev, image_next, number, end, lucky="#"):
 	#navtext=f"<a href='{prev}'>prev</a> | <a href='{next}'>next</a> | <a href='{top}'>index (grid)</a> | <a href='{top_list}'>index (list)</a> | <a href='{pic}'>image</a> | <a href='{lucky}'>lucky</a> | <a href='{rotate_img}'>rotate</a><br>"
 	navtext="".join(navparts)
 	#image navigation
-	imgtext=f"<a href='{prev}'><img src='{thumb_prev}' width={x_size} height={y_size}></a><a href='{next}'><img src='{thumb_next}' width={x_size} height={y_size}></a><br>"
+	if thumb_active:
+		imgtext=f"<a href='{prev}'><img src='{thumb_prev}' width={x_size} height={y_size}></a><a href='{next}'><img src='{thumb_next}' width={x_size} height={y_size}></a><br>"
+	else:
+		imgtext=f"<a href='{prev}'>[{image_prev}]</a> | <a href='{next}'>[{image_next}]</a><br>"
 	#emit page data
 	result.append(navtext)
-	if thumb_active:
-		result.append(imgtext)
+	result.append(imgtext)
 	result.append(f"<a href='{next}'><img src='{pic}'></a><br>")
-	if thumb_active:
-		result.append(imgtext)
+	result.append(imgtext)
 	result.append(navtext)
 	result.append(footer_text)
 	#write to disk
